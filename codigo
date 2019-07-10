@@ -1,0 +1,61 @@
+setwd("~/Documents/Competencias/Clubes/SESION 1")
+memory.limit(size = 60000)
+library(RStoolbox)
+library(devtools)
+install_url("https://github.com/Terradue/rLandsat8/releases/download/v0.1-SNAPSHOT/rLandsat8_0.1.0.tar.gz")
+install.packages("~/rLandsat8/target/R/src/rLandsat8_x.y.z.tar.gz",repos=NULL, type="source")
+library(rLandsat8)
+
+LC08_L1TP_009056_20190514_20190521_01_T1
+library(sp)
+library(raster)
+product  <- "LC08_L1TP_009056_20190514_20190521_01_T1"
+l <- ReadLandsat8(product)
+summary(l$band)
+#crear imagen a corregir solo bandas a usar
+OLI <-brick(c(aerosol=l$band$aerosol,
+              blue =  l$band$blue,
+              green = l$band$green,
+              red = l$band$red,
+              nir = l$band$nir,
+              swir1 = l$band$swir1,
+              swir2 = l$band$swir2))
+
+plotRGB(OLI, r = 4,g = 3,b = 2,stretch = "lin")
+
+meta<-readMeta("LC08_L1TP_009056_20190514_20190521_01_T1/LC08_L1TP_009056_20190514_20190521_01_T1_MTL.txt", raw = FALSE)
+meta_raster <- stackMeta(meta) 
+
+library(rgdal)
+g_ruiz <- readOGR(dsn = "EVMT_AREA_GLACIAR_RUIZ",
+                  layer = "EVMT_AREA_GLACIAR_RUIZ",
+                  encoding = "UTF-8",
+                  stringsAsFactors = F) 
+
+g_ruiz <- spTransform(g_ruiz, CRS("+proj=utm +zone=19 +north +datum=WGS84 +units=m +no_defs"))
+plot(g_ruiz,main = "Shapefile de la Regi�n Metropolitana",col = "grey90")
+r2 <- crop(OLI, extent(g_ruiz), snap="out")
+plotRGB(r2,r = 4,g = 3,b = 2,stretch = "lin")
+g_ruiz <- mask(r2, g_ruiz)                  
+plotRGB(g_ruiz,r = 4,g = 3,b = 2,stretch = "lin")
+plotRGB(g_ruiz,r = 5,g = 6,b = 4,stretch = "lin")#agua
+## Verificaci�n
+plot(g_ruiz, add=TRUE, lwd=1, border="blue")
+###Normalized difference Vegetation Index NDVI
+ndvi <- ToNDVI(l)
+plot(ndvi)
+
+#NDSI(img, green, swir)
+NDSI <- function(img, g, s) {
+  bg <- img[[g]]
+  bs <- img[[s]]
+  si <- (bg - bs) / (bg + bs)
+  return(si)
+}
+
+NDSI_C <- NDSI(r2, 3, 6)
+pal4 <- colorRampPalette(c("black", "navy", 
+                           "skyblue", "white"))( 200 )
+plot(NDSI_C, col = pal4, main = 'NDSI Zona Cordillerana')
+
+
